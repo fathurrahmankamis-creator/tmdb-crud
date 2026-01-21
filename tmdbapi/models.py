@@ -1,6 +1,9 @@
 import uuid
 from django.db import models
 
+# Test Git cli
+
+
 class MlGenre(models.Model):
     
     class Meta:
