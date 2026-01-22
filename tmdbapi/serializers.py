@@ -2,11 +2,9 @@ from rest_framework import serializers
 from .models import MlGenre, MlMovie
 
 class MlMovieSerializer(serializers.ModelSerializer):
-    genre = serializers.PrimaryKeyRelatedField(
-        queryset=MlGenre.objects.all(),
-        write_only=True
-    )
+    genre_name = serializers.CharField(write_only=True)
     genre_detail = serializers.SerializerMethodField(read_only=True)
+    genre = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model = MlMovie
@@ -30,7 +28,8 @@ class MlMovieSerializer(serializers.ModelSerializer):
             'updated_at',
             'updated_by',
             'genre',       
-            'genre_detail'  
+            'genre_detail',
+            'genre_name'
         ]
         read_only_fields = ['movie_guid', 'created_at', 'updated_at', 'genre_detail']
 
@@ -53,8 +52,18 @@ class MlMovieSerializer(serializers.ModelSerializer):
     
     def validate(self, attrs):
         title = attrs.get("title")
-        genre = attrs.get("genre") or getattr(self.instance, "genre", None)
+        genre_name = attrs.pop("genre_name", None)
         
+        if not genre_name or not genre_name.strip():
+            raise serializers.ValidationError({"genre_name": "Genre name cannot be empty."})
+        
+        try:
+            genre = MlGenre.objects.get(name__iexact=genre_name.strip())
+        except MlGenre.DoesNotExist:
+            raise serializers.ValidationError({"genre_name": f"Genre '{genre_name}' does not exist."})
+        
+        attrs['genre'] = genre
+                    
         if title and genre:
             qs = MlMovie.objects.filter(title__iexact=title, genre=genre)
             if self.instance:
