@@ -1,13 +1,17 @@
 import uuid
 from django.db import models
-
-# Test Git cli
-
+from django.db.models.functions import Lower
 
 class MlGenre(models.Model):
     
     class Meta:
         db_table = "ml_genre"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("name"),
+                name="uniq_ml_genre_name_ci"
+            )
+        ]
     
     genre_guid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
@@ -24,6 +28,13 @@ class MlMovie(models.Model):
     
     class Meta:
         db_table = 'ml_movie'
+        constraints = [
+            models.UniqueConstraint(
+                Lower("title"),
+                "genre",
+                name = "uniq_ml_movie_title_genre_ci"
+            )
+        ]
     
     movie_guid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
