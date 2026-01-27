@@ -1,5 +1,6 @@
 from django.db import transaction
 from rest_framework import serializers
+from django.db import transaction
 from .models import MlGenre, MlMovie
 
 class MlMovieSerializer(serializers.ModelSerializer):
@@ -35,14 +36,15 @@ class MlMovieSerializer(serializers.ModelSerializer):
         return value.strip()
 
     def validate(self, attrs):
-        title = attrs.get("title")
-        genre = attrs.get("genre")
-        genre_name = attrs.get("genre_name")
+        from_parent = bool(self.context.get("from_genre", False))
+        genre_name = attrs.pop("genre_name", None)
 
-        if not title or not title.strip():
-            raise serializers.ValidationError({"title": "Title cannot be empty."})
+        if self.instance:
+            genre = self.instance.genre
+        else:
+            genre = attrs.get("genre", None)
 
-        if not genre and not self.instance:
+        if not genre and not from_parent:
             if not genre_name or not genre_name.strip():
                 raise serializers.ValidationError({"genre_name": "Genre name cannot be empty."})
             try:
@@ -51,14 +53,13 @@ class MlMovieSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"genre_name": f"Genre '{genre_name}' does not exist."})
             attrs["genre"] = genre
 
-        if self.instance and not genre:
-            attrs["genre"] = self.instance.genre
-
-        qs = MlMovie.objects.filter(title__iexact=title.strip(), genre=attrs["genre"])
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError({"title": "A movie with this title already exists in this genre."})
+        title = attrs.get("title") or (self.instance.title if self.instance else None)
+        if title and genre:
+            qs = MlMovie.objects.filter(title__iexact=title.strip(), genre=genre)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({"title": "A movie with this title already exists in this genre."})
 
         return attrs
 
@@ -66,13 +67,49 @@ class MlMovieSerializer(serializers.ModelSerializer):
         validated_data.pop("genre_name", None)
         return MlMovie.objects.create(**validated_data)
 
+    def update(self, instance, validated_data):
+        genre_name = validated_data.pop("genre_name", None)
+
+        if genre_name and genre_name.strip():
+            try:
+                genre = MlGenre.objects.get(name__iexact=genre_name.strip())
+            except MlGenre.DoesNotExist:
+                raise serializers.ValidationError({"genre_name": f"Genre '{genre_name}' does not exist."})
+            instance.genre = genre
+        
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if instance.title and instance.genre:
+            qs = MlMovie.objects.filter(title__iexact=instance.title.strip(), genre=instance.genre)
+            qs = qs.exclude(pk=instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError({"title": "A movie with this title already exists in this genre."})
+
+        instance.save()
+        return instance
+
+class NestedMlMovieSerializer(serializers.ModelSerializer):
+    """
+    Nested serializer for creating movies under genre.
+    """
+    class Meta:
+        model = MlMovie
+        fields = [
+            'title', 'original_title', 'overview', 'poster_path', 'backdrop_path',
+            'media_type', 'adult', 'original_language', 'popularity', 'release_date', 'video',
+            'vote_average', 'vote_count', 'created_by'
+        ]
+
+
+class MlGenreSerializer(serializers.ModelSerializer):
+    movie_list = NestedMlMovieSerializer(many=True, required=False, source="movies")
+
 class NestedMlMovieSerializer(serializers.ModelSerializer):
     class Meta:
         model = MlMovie
         fields = [
-            'title','original_title','overview','poster_path','backdrop_path',
-            'media_type','adult','original_language','popularity','release_date','video',
-            'vote_average','vote_count','created_by'
+            'genre_guid', 'name', 'created_at', 'created_by', 'updated_at', 'updated_by', 'movie_list'
         ]
 
 class MlGenreSerializer(serializers.ModelSerializer):
@@ -95,8 +132,26 @@ class MlGenreSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         movies_data = validated_data.pop("movies", [])
+        seen_titles = set()
+
         with transaction.atomic():
             genre = MlGenre.objects.create(**validated_data)
+
             for movie_data in movies_data:
-                MlMovie.objects.create(genre=genre, **movie_data)
+                title = movie_data.get("title", "")
+                if not title or not title.strip():
+                    raise serializers.ValidationError({"movie_list": "Movie title cannot be empty."})
+
+                key = title.strip().lower()
+                if key in seen_titles:
+                    raise serializers.ValidationError({"movie_list": f"Duplicate movie title in payload: {title}"})
+                seen_titles.add(key)
+
+                serializer = MlMovieSerializer(
+                    data=movie_data,
+                    context={"from_genre": True}
+                )
+                serializer.is_valid(raise_exception=True)
+                serializer.save(genre=genre)
+
         return genre
