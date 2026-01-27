@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 from django.db import transaction
 from .models import MlGenre, MlMovie
@@ -10,12 +11,12 @@ class MlMovieSerializer(serializers.ModelSerializer):
     class Meta:
         model = MlMovie
         fields = [
-            'movie_guid', 'title', 'original_title', 'overview', 'poster_path', 'backdrop_path',
-            'media_type', 'adult', 'original_language', 'popularity', 'release_date', 'video',
-            'vote_average', 'vote_count', 'created_at', 'created_by', 'updated_at', 'updated_by',
-            'genre', 'genre_detail', 'genre_name'
+            'movie_guid','title','original_title','overview','poster_path','backdrop_path',
+            'media_type','adult','original_language','popularity','release_date','video',
+            'vote_average','vote_count','created_at','created_by','updated_at','updated_by',
+            'genre','genre_detail','genre_name'
         ]
-        read_only_fields = ['movie_guid', 'created_at', 'updated_at', 'genre_detail']
+        read_only_fields = ['movie_guid','created_at','updated_at','genre_detail']
 
     def get_genre_detail(self, obj):
         if obj.genre:
@@ -104,12 +105,20 @@ class NestedMlMovieSerializer(serializers.ModelSerializer):
 class MlGenreSerializer(serializers.ModelSerializer):
     movie_list = NestedMlMovieSerializer(many=True, required=False, source="movies")
 
+class NestedMlMovieSerializer(serializers.ModelSerializer):
     class Meta:
-        model = MlGenre
+        model = MlMovie
         fields = [
             'genre_guid', 'name', 'created_at', 'created_by', 'updated_at', 'updated_by', 'movie_list'
         ]
-        read_only_fields = ['genre_guid', 'created_at', 'updated_at']
+
+class MlGenreSerializer(serializers.ModelSerializer):
+    movie_list = NestedMlMovieSerializer(many=True, required=False, source="movies")
+
+    class Meta:
+        model = MlGenre
+        fields = ["genre_guid","name","created_at","created_by","updated_at","updated_by","movie_list"]
+        read_only_fields = ["genre_guid","created_at","updated_at"]
 
     def validate_name(self, value):
         if not value or not value.strip():
