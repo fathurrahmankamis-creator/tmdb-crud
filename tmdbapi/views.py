@@ -42,8 +42,19 @@ class MlGenreViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
+        
+        genre_name = request.query_params.get("search", None)
+        if genre_name:
+            queryset = queryset.filter(name__icontains=genre_name.strip())
+            
+        if not queryset.exists():
+            return success_response(
+                message="No Genre Found",
+                results=[],
+                status_code=status.HTTP_200_OK
+            )
+        
         serializer = self.get_serializer(queryset, many=True)
-
         return success_response(
             message="Get Successfully",
             results=serializer.data,
@@ -121,8 +132,12 @@ class MlMovieViewSet(viewsets.ModelViewSet):
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
+        
+        search_query = request.query_params.get("search", None)
+        if search_query:
+            queryset = queryset.filter(title__icontains=search_query.strip())
+        
         page = self.paginate_queryset(queryset)
-
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             paginated_data = self.get_paginated_response(serializer.data).data

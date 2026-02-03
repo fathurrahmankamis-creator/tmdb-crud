@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models.functions import Lower
 
 class MlGenre(models.Model):
-    
+
     class Meta:
         db_table = "ml_genre"
         constraints = [
@@ -12,11 +12,11 @@ class MlGenre(models.Model):
                 name="uniq_ml_genre_name_ci"
             )
         ]
-    
+
     genre_guid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.CharField(max_length=255)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.CharField(max_length=255, null=True, blank=True)
 
@@ -25,17 +25,17 @@ class MlGenre(models.Model):
 
 
 class MlMovie(models.Model):
-    
+
     class Meta:
         db_table = 'ml_movie'
         constraints = [
             models.UniqueConstraint(
                 Lower("title"),
                 "genre",
-                name = "uniq_ml_movie_title_genre_ci"
+                name="uniq_ml_movie_title_genre_ci"
             )
         ]
-    
+
     movie_guid = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=255)
     original_title = models.CharField(max_length=255)
@@ -51,7 +51,7 @@ class MlMovie(models.Model):
     vote_average = models.FloatField(null=True, blank=True)
     vote_count = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.CharField(max_length=255)
+    created_by = models.CharField(max_length=255, null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.CharField(max_length=255, null=True, blank=True)
 
